@@ -9,17 +9,15 @@ import UIKit
 import ImageIO
 import CryptoKit
 
+enum ImageType {
+    case thumbnail
+    case original
+}
+
 class ImageLoader {
     
     static let shared = ImageLoader()
     
-    let thumbnailsDirName = "thumbnails"
-    let originalImagesDirName = "images"
-    
-    enum ImageType {
-        case thumbnail
-        case original
-    }
     private let imageThumbnailCache = NSCache<NSURL, UIImage>()
     private let imageCache = NSCache<NSURL, UIImage>()
     
@@ -28,22 +26,38 @@ class ImageLoader {
         imageCache.countLimit = 100
     }
     
-    func loadThumbnail(from url: URL) async throws -> UIImage {
-        if let cached = imageThumbnailCache.object(forKey: url as NSURL) {
-            return cached
+    func loadImage(from url: URL, type: ImageType) async throws -> UIImage {
+        if let memCached = loadFromCache(url: url, type: type) {
+            return memCached
         }
-        if let diskThumb = loadImageFromDisk(url: url, type: .thumbnail) {
-            imageThumbnailCache.setObject(diskThumb, forKey: url as NSURL)
-            return diskThumb
+        if let diskCached = try loadImageFromDisk(url: url, type: type) {
+            cache(for: type).setObject(diskCached, forKey: url as NSURL)
+            return diskCached
         }
         let (data, _) = try await URLSession.shared.data(from: url)
-        guard let image = createThumbnail(from: data) else {
+        guard let image = UIImage(data: data),
+              let thumbnail = createThumbnail(from: data) else {
             throw URLError(.cannotDecodeContentData)
         }
-        imageCache.setObject(image, forKey: url as NSURL)
-        return image
+        // В кэш отправляет только то с чем взаимодействовали
+        if type == .original {
+            imageCache.setObject(image, forKey: url as NSURL)
+        } else {
+            imageThumbnailCache.setObject(thumbnail, forKey: url as NSURL)
+        }
+        // Сохраняет на диск оба типа
+        try saveImageDataToDisk(data, url: url, for: .original)
+        if let jpgData = thumbnail.jpegData(compressionQuality: 1) {
+            try saveImageDataToDisk(jpgData, url: url, for: .thumbnail)
+        }
+        return type == .original ? image : thumbnail
     }
     
+    
+    private func cache(for type: ImageType) -> NSCache<NSURL, UIImage> {
+        type == .original ? imageCache : imageThumbnailCache
+    }
+
     private func createThumbnail(from imageData: Data, maxPixelSize: Int = 350) -> UIImage? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -59,22 +73,40 @@ class ImageLoader {
         return UIImage(cgImage: cgImage)
     }
     
-    private func loadImageFromDisk(url: URL, type: ImageType) -> UIImage? {
-        let cacheDir = cacheDirectory(for: type)
-        let fileName = hashedFilename(for: url)
-        let fileURL = cacheDir.appendingPathComponent(fileName)
+    private func loadFromCache(url: URL, type: ImageType) -> UIImage? {
+        let cache = type == .original ? imageCache : imageThumbnailCache
+        if let cached = cache.object(forKey: url as NSURL) {
+            return cached
+        }
+        return nil
+    }
+    
+    private func loadImageFromDisk(url: URL, type: ImageType) throws -> UIImage? {
+        let fileURL = try localFileUrl(from: url, for: type)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
         return UIImage(contentsOfFile: fileURL.path)
     }
     
-    private func cacheDirectory(for type: ImageType) -> URL {
+    func saveImageDataToDisk(_ imageData: Data, url: URL, for type: ImageType) throws {
+        let fileURL = try localFileUrl(from: url, for: type)
+        try imageData.write(to: fileURL)
+    }
+    
+    private func localFileUrl(from remoteUrl: URL, for type: ImageType) throws -> URL {
+        let cacheDir = try cacheDirectory(for: type)
+        let fileName = hashedFilename(for: remoteUrl)
+        let fileURL = cacheDir.appendingPathComponent(fileName)
+        return fileURL
+    }
+    
+    private func cacheDirectory(for type: ImageType) throws -> URL {
         let dirName = type == .original ? "images" : "thumbnails"
         let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let newDir = cacheDir.appendingPathComponent(dirName)
         guard !FileManager.default.fileExists(atPath: newDir.path()) else {
             return newDir
         }
-        try? FileManager.default.createDirectory(at: newDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: newDir, withIntermediateDirectories: true)
         return newDir
     }
     
@@ -83,17 +115,4 @@ class ImageLoader {
         let hash = SHA256.hash(data: data)
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
-
-    func saveImageDataToDisk(_ imageData: Data, url: URL, for type: ImageType) {
-        
-    }
-
-//    func saveImageToDisk(_ image: UIImage, url: URL) {
-//        guard let data = image.jpegData(compressionQuality: 0.9) else { return }
-//        try? data.write(to: imageFileURL(for: url))
-//    }
-
-    
-
-    
 }
