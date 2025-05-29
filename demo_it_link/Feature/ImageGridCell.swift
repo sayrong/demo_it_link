@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ImageGridCell: View {
     
-    enum LoadState {
+    enum ImageLoadState {
         case idle
         case loading
         case success(UIImage)
@@ -17,25 +17,28 @@ struct ImageGridCell: View {
     }
     
     let photoURL: URL?
-    @State private var imageState: LoadState = .loading
+    @State private var imageState: ImageLoadState = .idle
     @State private var task: Task<Void, Never>? = nil
     
     var body: some View {
-        ZStack {
-            switch imageState {
-            case .idle:
-                placeholder()
-            case .loading:
-                loadingView()
-            case .success(let image):
-                thumbnail(image)
-            case .failure(_):
-                retryView()
+        GeometryReader { geometry in
+            ZStack {
+                switch imageState {
+                case .idle:
+                    placeholder()
+                case .loading:
+                    loadingView()
+                case .success(let image):
+                    thumbnail(image)
+                case .failure(_):
+                    retryView()
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.width)
         }
-        .frame(width: 200, height: 200)
-        .border(Color.gray.opacity(0.2))
+        .aspectRatio(1, contentMode: .fit)
         .clipped()
+        .border(Color.black.opacity(0.1))
         .onAppear {
             task?.cancel()
             Task {
@@ -53,6 +56,7 @@ struct ImageGridCell: View {
             .scaledToFit()
             .foregroundColor(.gray)
             .opacity(0.5)
+            .padding(30)
     }
     
     private func thumbnail(_ image: UIImage) -> some View {
@@ -67,6 +71,7 @@ struct ImageGridCell: View {
             .scaledToFit()
             .foregroundColor(.gray)
             .opacity(0.5)
+            .padding(30)
             .onTapGesture {
                 Task {
                     await loadImage()
@@ -79,7 +84,12 @@ struct ImageGridCell: View {
     }
     
     private func loadImage() async {
-        guard let url = photoURL else { return }
+        guard let url = photoURL,
+              let scheme = url.scheme,
+              !scheme.isEmpty else {
+            return
+        }
+        imageState = .loading
         do {
             let image = try await ImageLoader.shared.loadImage(from: url, type: .thumbnail)
             imageState = .success(image)

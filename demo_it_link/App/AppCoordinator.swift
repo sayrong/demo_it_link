@@ -24,6 +24,7 @@ final class AppCoordinator: ObservableObject {
         self.networkMonitor = NetworkMonitor()
         self.imageRefService = ImageRefService()
         bindObserver()
+        startDownload()
     }
     
     func startDownload() {
@@ -31,9 +32,13 @@ final class AppCoordinator: ObservableObject {
             state = .loading
             do {
                 let result = try await imageRefService.getImageRefs()
-                state = .loaded(result)
+                await MainActor.run {
+                    state = .loaded(result)
+                }
             } catch {
-                state = .failed(error)
+                await MainActor.run {
+                    state = .failed(error)
+                }
             }
         }
     }
@@ -60,7 +65,7 @@ final class AppCoordinator: ObservableObject {
         case .failed(let error):
             Text(error.localizedDescription)
         case .loaded(let imageRefs):
-            Text("")
+            ImageGrid(data: imageRefs)
         }
     }
 }

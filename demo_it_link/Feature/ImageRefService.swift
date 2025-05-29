@@ -25,15 +25,9 @@ class ImageRefService: ImageRefServiceProtocol {
         let fileContent = try String(contentsOf: source, encoding: .utf8)
         return fileContent
             .components(separatedBy: .newlines)
-            .compactMap({ line in
+            .map({ line in
                 let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                guard !trimmedLine.isEmpty else { return nil }
-                
-                guard let url = URL(string: trimmedLine) else {
-                    print("Invalid URL skipped: \(trimmedLine)")
-                    return nil
-                }
+                let url = URL(string: trimmedLine)
                 return ImageRef(url: url)
             })
     }
