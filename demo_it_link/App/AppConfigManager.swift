@@ -1,12 +1,12 @@
 //
-//  AppCoordinator.swift
+//  AppConfigManager.swift
 //  demo_it_link
 //
 //  Created by DmitrySK on 28.05.2025.
 //
 import SwiftUI
 
-final class AppCoordinator: ObservableObject {
+final class AppConfigManager: ObservableObject {
     
     enum State {
         case idle
