@@ -12,13 +12,17 @@ struct ImageDetails: View {
     let data: [ImageRef]
     
     @State var startIndex: Int = 0
-    @Binding var selectedIndex: Int
     @State private var currentScale: CGFloat = 1.0
     @GestureState private var gestureScale: CGFloat = 1.0
     let maxScale: CGFloat = 2.0
     let minScale: CGFloat = 0.5
-    
     var onClose: (() -> Void)? = nil
+    
+    init(data: [ImageRef], startIndex: Int = 0, onClose: (() -> Void)? = nil) {
+        self.data = data
+        _startIndex = State(initialValue: startIndex)
+        self.onClose = onClose
+    }
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -52,12 +56,9 @@ struct ImageDetails: View {
             }
         }
         .background(Color(.secondarySystemBackground))
-        .onAppear {
-            startIndex = selectedIndex
-        }
     }
 }
 
 #Preview {
-    ImageDetails(data: ImageRef.previewArray(), selectedIndex: .constant(0))
+    ImageDetails(data: ImageRef.previewArray())
 }
