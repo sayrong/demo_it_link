@@ -1,5 +1,5 @@
 //
-//  ImageGridCell.swift
+//  AsyncImageView.swift
 //  demo_it_link
 //
 //  Created by DmitrySK on 28.05.2025.
@@ -7,7 +7,12 @@
 
 import SwiftUI
 
-struct ImageGridCell: View {
+struct AsyncImageView: View {
+    
+    enum DisplayMode {
+        case grid
+        case detail
+    }
     
     enum ImageLoadState {
         case idle
@@ -17,6 +22,8 @@ struct ImageGridCell: View {
     }
     
     let photoURL: URL?
+    
+    let mode: DisplayMode
     @State private var imageState: ImageLoadState = .idle
     @State private var task: Task<Void, Never>? = nil
     
@@ -38,7 +45,6 @@ struct ImageGridCell: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .clipped()
-        .border(Color.black.opacity(0.1))
         .onAppear {
             task?.cancel()
             Task {
@@ -62,7 +68,7 @@ struct ImageGridCell: View {
     private func thumbnail(_ image: UIImage) -> some View {
         Image(uiImage: image)
             .resizable()
-            .scaledToFill()
+            .aspectRatio(contentMode: mode == .detail ? .fit : .fill)
     }
     
     private func retryView() -> some View {
@@ -91,7 +97,8 @@ struct ImageGridCell: View {
         }
         imageState = .loading
         do {
-            let image = try await ImageLoader.shared.loadImage(from: url, type: .thumbnail)
+            let type: ImageType = mode == .grid ? .thumbnail : .original
+            let image = try await ImageLoader.shared.loadImage(from: url, type: type)
             imageState = .success(image)
         } catch {
             imageState = .failure(error)
@@ -100,5 +107,5 @@ struct ImageGridCell: View {
 }
 
 #Preview {
-    ImageGridCell(photoURL: nil)
+    AsyncImageView(photoURL: nil, mode: .grid)
 }

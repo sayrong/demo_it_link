@@ -19,12 +19,13 @@ struct ImageGrid: View {
         ScrollView {
             LazyVGrid(columns: gridItems(), spacing: 0) {
                 ForEach(data) { imageRef in
-                    ImageGridCell(photoURL: imageRef.url)
+                    AsyncImageView(photoURL: imageRef.url, mode: .grid)
                 }
             }
             .animation(.easeInOut, value: currentScale)
            
         }
+        .background(Color(.systemBackground))
         .simultaneousGesture(
             MagnifyGesture()
                 .onEnded { value in
