@@ -14,16 +14,21 @@ struct ImageGrid: View {
     let maxScale: CGFloat = 2.0
     let minScale: CGFloat = 0.5
     @State private var currentScale: CGFloat = 1.0
+    @State private var isDetailedPresented: Bool = false
+    @State private var selectedIndex: Int = 0
     
     var body: some View {
         ScrollView {
             LazyVGrid(columns: gridItems(), spacing: 0) {
-                ForEach(data) { imageRef in
-                    AsyncImageView(photoURL: imageRef.url, mode: .grid)
+                ForEach(data.indices, id: \.self) { idx in
+                    AsyncImageView(photoURL: data[idx].url, mode: .grid)
+                        .onTapGesture {
+                            selectedIndex = idx
+                            isDetailedPresented = true
+                        }
                 }
             }
             .animation(.easeInOut, value: currentScale)
-           
         }
         .background(Color(.systemBackground))
         .simultaneousGesture(
@@ -33,6 +38,11 @@ struct ImageGrid: View {
                     currentScale = min(max(newValue, minScale), maxScale)
                 }
         )
+        .fullScreenCover(isPresented: $isDetailedPresented) {
+            ImageDetails(data: data, selectedIndex: $selectedIndex) {
+                isDetailedPresented = false
+            }
+        }
     }
     
     func gridItems() -> [GridItem] {

@@ -11,34 +11,53 @@ struct ImageDetails: View {
     
     let data: [ImageRef]
     
+    @State var startIndex: Int = 0
+    @Binding var selectedIndex: Int
     @State private var currentScale: CGFloat = 1.0
     @GestureState private var gestureScale: CGFloat = 1.0
     let maxScale: CGFloat = 2.0
     let minScale: CGFloat = 0.5
     
+    var onClose: (() -> Void)? = nil
+    
     var body: some View {
-        TabView {
-            ForEach(data, id: \.self) { ref in
-                AsyncImageView(photoURL: ref.url, mode: .detail)
-                    .scaleEffect(currentScale * gestureScale)
-                    .gesture(MagnifyGesture()
-                        .updating($gestureScale) { value, state, _ in
-                            let newValue = currentScale * value.magnification
-                            if newValue > minScale && newValue < maxScale {
-                                state = value.magnification
+        ZStack(alignment: .topTrailing) {
+            TabView(selection: $startIndex) {
+                ForEach(data.indices, id: \.self) { idx in
+                    AsyncImageView(photoURL: data[idx].url, mode: .detail)
+                        .tag(idx)
+                        .scaleEffect(currentScale * gestureScale)
+                        .gesture(MagnifyGesture()
+                            .updating($gestureScale) { value, state, _ in
+                                let newValue = currentScale * value.magnification
+                                if newValue > minScale && newValue < maxScale {
+                                    state = value.magnification
+                                }
                             }
-                        }
-                        .onEnded { value in
-                            let newValue = currentScale * value.magnification
-                            currentScale = min(max(newValue, minScale), maxScale)
-                        })
+                            .onEnded { value in
+                                let newValue = currentScale * value.magnification
+                                currentScale = min(max(newValue, minScale), maxScale)
+                            })
+                }
+            }
+            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
+            
+            Button {
+                onClose?()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundColor(.secondary)
+                    .padding()
             }
         }
-        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
         .background(Color(.secondarySystemBackground))
+        .onAppear {
+            startIndex = selectedIndex
+        }
     }
 }
 
 #Preview {
-    ImageDetails(data: ImageRef.previewArray())
+    ImageDetails(data: ImageRef.previewArray(), selectedIndex: .constant(0))
 }
