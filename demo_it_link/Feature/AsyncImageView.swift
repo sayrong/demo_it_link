@@ -7,6 +7,30 @@
 
 import SwiftUI
 
+struct DetailAsyncImageView: View {
+    let photoURL: URL?
+    
+    var body: some View {
+        AsyncImageView(photoURL: photoURL, mode: .detail)
+            .frame(maxHeight: .infinity)
+            .clipped()
+    }
+}
+
+struct GridAsyncImageView: View {
+    let photoURL: URL?
+ 
+    var body: some View {
+        GeometryReader { geometry in
+            AsyncImageView(photoURL: photoURL, mode: .grid)
+                .frame(width: geometry.size.width, height: geometry.size.width)
+                
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipped()
+    }
+}
+
 struct AsyncImageView: View {
     
     enum DisplayMode {
@@ -26,25 +50,24 @@ struct AsyncImageView: View {
     let mode: DisplayMode
     @State private var imageState: ImageLoadState = .idle
     @State private var task: Task<Void, Never>? = nil
+    @State private var currentScale: CGFloat = 1.0
+    @GestureState private var gestureScale: CGFloat = 1.0
+    let maxScale: CGFloat = 2.0
+    let minScale: CGFloat = 0.5
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                switch imageState {
-                case .idle:
-                    placeholder()
-                case .loading:
-                    loadingView()
-                case .success(let image):
-                    thumbnail(image)
-                case .failure(_):
-                    retryView()
-                }
+        ZStack {
+            switch imageState {
+            case .idle:
+                placeholder()
+            case .loading:
+                loadingView()
+            case .success(let image):
+                presentedImage(image)
+            case .failure(_):
+                retryView()
             }
-            .frame(width: geometry.size.width, height: geometry.size.width)
         }
-        .aspectRatio(1, contentMode: .fit)
-        .clipped()
         .onAppear {
             task?.cancel()
             Task {
@@ -65,10 +88,37 @@ struct AsyncImageView: View {
             .padding(30)
     }
     
+    @ViewBuilder
+    private func presentedImage(_ image: UIImage) -> some View {
+        if mode == .grid {
+            thumbnail(image)
+        } else {
+            originalImage(image)
+        }
+    }
+    
     private func thumbnail(_ image: UIImage) -> some View {
         Image(uiImage: image)
             .resizable()
-            .aspectRatio(contentMode: mode == .detail ? .fit : .fill)
+            .aspectRatio(contentMode: .fill)
+    }
+    
+    private func originalImage(_ image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaleEffect(currentScale * gestureScale)
+            .aspectRatio(contentMode: .fit)
+            .gesture(MagnifyGesture()
+                .updating($gestureScale) { value, state, _ in
+                    let newValue = currentScale * value.magnification
+                    if newValue > minScale && newValue < maxScale {
+                        state = value.magnification
+                    }
+                }
+                .onEnded { value in
+                    let newValue = currentScale * value.magnification
+                    currentScale = min(max(newValue, minScale), maxScale)
+                })
     }
     
     private func retryView() -> some View {

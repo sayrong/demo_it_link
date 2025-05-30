@@ -13,10 +13,6 @@ struct ImageDetails: View {
     
     @State private var isSharing = false
     @State private var startIndex: Int = 0
-    @State private var currentScale: CGFloat = 1.0
-    @GestureState private var gestureScale: CGFloat = 1.0
-    let maxScale: CGFloat = 2.0
-    let minScale: CGFloat = 0.5
     var onClose: (() -> Void)? = nil
     
     init(data: [ImageRef], startIndex: Int = 0, onClose: (() -> Void)? = nil) {
@@ -29,20 +25,8 @@ struct ImageDetails: View {
         ZStack(alignment: .topTrailing) {
             TabView(selection: $startIndex) {
                 ForEach(data.indices, id: \.self) { idx in
-                    AsyncImageView(photoURL: data[idx].url, mode: .detail)
+                    DetailAsyncImageView(photoURL: data[idx].url)
                         .tag(idx)
-                        .scaleEffect(currentScale * gestureScale)
-                        .gesture(MagnifyGesture()
-                            .updating($gestureScale) { value, state, _ in
-                                let newValue = currentScale * value.magnification
-                                if newValue > minScale && newValue < maxScale {
-                                    state = value.magnification
-                                }
-                            }
-                            .onEnded { value in
-                                let newValue = currentScale * value.magnification
-                                currentScale = min(max(newValue, minScale), maxScale)
-                            })
                 }
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))

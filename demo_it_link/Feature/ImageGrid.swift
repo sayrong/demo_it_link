@@ -21,7 +21,7 @@ struct ImageGrid: View {
             ScrollView {
                 LazyVGrid(columns: gridItems(), spacing: 0) {
                     ForEach(data.indices, id: \.self) { idx in
-                        AsyncImageView(photoURL: data[idx].url, mode: .grid)
+                        GridAsyncImageView(photoURL: data[idx].url)
                             .onTapGesture {
                                 withAnimation() {
                                     selectedIndex = idx
