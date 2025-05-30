@@ -11,7 +11,8 @@ struct ImageDetails: View {
     
     let data: [ImageRef]
     
-    @State var startIndex: Int = 0
+    @State private var isSharing = false
+    @State private var startIndex: Int = 0
     @State private var currentScale: CGFloat = 1.0
     @GestureState private var gestureScale: CGFloat = 1.0
     let maxScale: CGFloat = 2.0
@@ -46,16 +47,52 @@ struct ImageDetails: View {
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
             
-            Button {
-                onClose?()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundColor(.secondary)
-                    .padding()
+            HStack {
+                menuWithShare()
+                Spacer()
+                closeButton()
             }
         }
         .background(Color(.secondarySystemBackground))
+    }
+    
+    @ViewBuilder
+    private func menuWithShare() -> some View {
+        if let link = data[startIndex].url,
+            let scheme = link.scheme, !scheme.isEmpty  {
+            Menu {
+                Button {
+                    isSharing = true
+                } label: {
+                    Label("Поделиться", systemImage: "square.and.arrow.up")
+                }
+
+                Button {
+                    UIApplication.shared.open(link)
+                } label: {
+                    Label("Открыть в браузере", systemImage: "safari")
+                }
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 25))
+                    .foregroundColor(.secondary)
+                    .padding()
+            }
+            .sheet(isPresented: $isSharing) {
+                ActivityView(activityItems: [link])
+            }
+        }
+    }
+    
+    private func closeButton() -> some View {
+        Button {
+            onClose?()
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 30))
+                .foregroundColor(.secondary)
+                .padding()
+        }
     }
 }
 
