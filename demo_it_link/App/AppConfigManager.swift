@@ -29,7 +29,9 @@ final class AppConfigManager: ObservableObject {
     
     func startDownload() {
         Task {
-            state = .loading
+            await MainActor.run {
+                state = .loading
+            }
             do {
                 let result = try await imageRefService.getImageRefs()
                 await MainActor.run {

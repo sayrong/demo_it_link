@@ -139,6 +139,7 @@ struct AsyncImageView: View {
         ProgressView()
     }
     
+    @MainActor
     private func loadImage() async {
         guard let url = photoURL,
               let scheme = url.scheme,

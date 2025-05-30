@@ -11,6 +11,12 @@ protocol ImageRefRepositoryProtocol {
     func getSourceFile() async throws -> URL
 }
 
+enum TextFileLoaderErrors: Error {
+    case invalidSourceURL
+    case badServerResponse
+    case invalidFileFormat
+}
+
 class ImageRefRepository: ImageRefRepositoryProtocol {
     
     var inputSource = "https://it-link.ru/test/images.txt"
