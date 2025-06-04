@@ -14,12 +14,24 @@ enum ImageType {
     case original
 }
 
-class ImageLoader {
+actor ImageLoader {
     
     static let shared = ImageLoader()
     
     private let imageThumbnailCache = NSCache<NSURL, UIImage>()
     private let imageCache = NSCache<NSURL, UIImage>()
+    
+    private enum LoaderStatus {
+        case inProgress(Task<UIImage, Error>)
+        case fetched(UIImage)
+    }
+    
+    private struct LoadKey: Hashable {
+        let url: URL
+        let type: ImageType
+    }
+    
+    private var images: [LoadKey: LoaderStatus] = [:]
     
     init() {
         imageThumbnailCache.countLimit = 100
@@ -27,32 +39,91 @@ class ImageLoader {
     }
     
     func loadImage(from url: URL, type: ImageType) async throws -> UIImage {
+        try Task.checkCancellation()
+        
+        let key = LoadKey(url: url, type: type)
+        if let status = images[key] {
+            switch status {
+            case .fetched(let image):
+                return image
+            case .inProgress(let task):
+                return try await task.value
+            }
+        }
+        
         if let memCached = loadFromCache(url: url, type: type) {
+            images[key] = .fetched(memCached)
             return memCached
         }
+        
         if let diskCached = try loadImageFromDisk(url: url, type: type) {
             cache(for: type).setObject(diskCached, forKey: url as NSURL)
+            images[key] = .fetched(diskCached)
             return diskCached
         }
+        
+        let task: Task<UIImage, Error> = Task {
+            try await processImage(url, type)
+        }
+        
+        images[key] = .inProgress(task)
+        defer { images.removeValue(forKey: key) }
+        
+        let image = try await task.value
+        images[key] = .fetched(image)
+        
+        return image
+    }
+    
+    private func processImage(_ url: URL, _ type: ImageType) async throws -> UIImage {
+        try Task.checkCancellation()
+        // Лезем в сеть
         let (data, _) = try await URLSession.shared.data(from: url)
-        guard let image = UIImage(data: data),
-              let thumbnail = createThumbnail(from: data) else {
+        guard let image = UIImage(data: data) else {
             throw URLError(.cannotDecodeContentData)
         }
+        // Создание thumbnail
+        let thumbnail = try await createThumbnailAsync(data: data)
         // В кэш отправляет только то с чем взаимодействовали
         if type == .original {
             imageCache.setObject(image, forKey: url as NSURL)
         } else {
             imageThumbnailCache.setObject(thumbnail, forKey: url as NSURL)
         }
-        // Сохраняет на диск оба типа
-        try saveImageDataToDisk(data, url: url, for: .original)
-        if let jpgData = thumbnail.jpegData(compressionQuality: 1) {
-            try saveImageDataToDisk(jpgData, url: url, for: .thumbnail)
+        // Сохраняет на диск оба типа без ожидания
+        Task.detached {
+            do {
+                try await self.saveImages(data: data, thumbnail: thumbnail, url: url)
+            } catch {
+                print(error.localizedDescription)
+            }
         }
         return type == .original ? image : thumbnail
     }
     
+    private func createThumbnailAsync(data: Data) async throws -> UIImage {
+        try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            guard let thumbnail = await self.createThumbnail(from: data) else {
+                throw URLError(.cannotCreateFile)
+            }
+            return thumbnail
+        }.value
+    }
+    
+    private func saveImages(data: Data, thumbnail: UIImage, url: URL) async throws {
+        await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await self.saveImageDataToDisk(data, url: url, for: .original)
+            }
+            
+            group.addTask {
+                if let jpgData = thumbnail.jpegData(compressionQuality: 0.8) {
+                    try await self.saveImageDataToDisk(jpgData, url: url, for: .thumbnail)
+                }
+            }
+        }
+    }
     
     private func cache(for type: ImageType) -> NSCache<NSURL, UIImage> {
         type == .original ? imageCache : imageThumbnailCache
@@ -87,7 +158,7 @@ class ImageLoader {
         return UIImage(contentsOfFile: fileURL.path)
     }
     
-    func saveImageDataToDisk(_ imageData: Data, url: URL, for type: ImageType) throws {
+    private func saveImageDataToDisk(_ imageData: Data, url: URL, for type: ImageType) throws {
         let fileURL = try localFileUrl(from: url, for: type)
         try imageData.write(to: fileURL)
     }
